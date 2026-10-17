@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crypto Agent</title>
+<style>
+:root{
+  --bg:#EEF2F1; --surface:#FFFFFF; --ink:#12263A; --muted:#5B6B7A; --rule:#D5DDDB;
+  --accent:#2B50F0; --on-accent:#FFFFFF; --gain:#0F7A55; --loss:#C2391F;
+  --serif: ui-serif, "New York", Georgia, "Times New Roman", serif;
+  --sans: system-ui, -apple-system, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0E1A24; --surface:#152633; --ink:#E6EEF2; --muted:#93A4B1; --rule:#27394A;
+    --accent:#7C98FF; --on-accent:#0E1A24; --gain:#3DD598; --loss:#FF8A6B;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans)}
+.wrap{max-width:1040px;margin:0 auto;padding:24px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;padding-bottom:16px;border-bottom:1px solid var(--rule)}
+.brand{font:600 22px/1.2 var(--serif);margin:0}
+#status{color:var(--muted);font-size:14px;margin:0;max-width:60ch}
+#status.err{color:var(--loss)}
+.hero{padding:32px 0 24px}
+.hero .who{color:var(--muted);margin:0 0 4px}
+.price{font:600 clamp(40px,8vw,64px)/1.05 var(--sans);font-variant-numeric:tabular-nums;letter-spacing:-0.02em;margin:0}
+.chg{font-size:18px;font-variant-numeric:tabular-nums;margin:8px 0 0}
+.up{color:var(--gain)}.down{color:var(--loss)}
+.grid{display:grid;gap:32px;grid-template-columns:1fr}
+@media (min-width:860px){.grid{grid-template-columns:1.1fr 0.9fr}}
+h2{font:600 20px/1.3 var(--serif);margin:0 0 8px}
+.cols,.row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,0.8fr) auto;gap:16px;align-items:center}
+.cols{color:var(--muted);font-size:14px;padding:8px 0;border-bottom:1px solid var(--rule)}
+.row{padding:16px 0;border-bottom:1px solid var(--rule)}
+.row .nm span{color:var(--muted);margin-left:8px;font-size:14px}
+.num{font-variant-numeric:tabular-nums;text-align:right}
+.cols .num{text-align:right}
+button{font:inherit;cursor:pointer}
+.link{background:none;border:0;color:var(--muted);padding:8px;text-decoration:underline}
+.add{display:flex;gap:8px;margin-top:16px}
+input{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:8px;padding:12px;min-width:0}
+.add input,.ask input{flex:1}
+.btn{background:var(--accent);color:var(--on-accent);border:0;border-radius:8px;padding:12px 20px;font-weight:600}
+.btn:disabled{opacity:.6;cursor:wait}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:16px}
+#log{height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:4px 0 12px}
+.msg{max-width:90%;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.u{align-self:flex-end;background:var(--accent);color:var(--on-accent);padding:8px 12px;border-radius:12px}
+.msg.a{align-self:flex-start}
+.ask{display:flex;gap:8px;border-top:1px solid var(--rule);padding-top:12px}
+.hint{color:var(--muted);font-size:14px;margin:8px 0 0}
+details{margin-top:32px;border-top:1px solid var(--rule);padding-top:16px}
+summary{cursor:pointer;font:600 20px/1.3 var(--serif)}
+.set{display:grid;gap:16px;margin-top:16px;max-width:560px}
+.set label{display:grid;gap:4px;font-size:14px;color:var(--muted)}
+footer{color:var(--muted);font-size:14px;margin-top:32px}
+@media (max-width:560px){.cols{display:none}.row{grid-template-columns:1fr auto}.row .num{text-align:left}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 class="brand">Crypto Agent</h1>
+    <p id="status" role="status">Loading prices…</p>
+  </header>
+
+  <section class="hero" aria-live="polite">
+    <p class="who" id="heroName">Bitcoin</p>
+    <p class="price" id="heroPrice">—</p>
+    <p class="chg" id="heroChg"></p>
+  </section>
+
+  <div class="grid">
+    <section>
+      <h2>Watchlist</h2>
+      <div class="cols"><span>Coin</span><span class="num">Price (USD)</span><span class="num">24 hours</span><span></span></div>
+      <div id="rows"></div>
+      <div class="add">
+        <input id="addq" placeholder="Add a coin, e.g. cardano" aria-label="Add a coin">
+        <button class="btn" id="addbtn">Add coin</button>
+      </div>
+      <p class="hint" id="addmsg"></p>
+    </section>
+
+    <section class="panel">
+      <h2>Ask the agent</h2>
+      <div id="log" aria-live="polite"></div>
+      <form class="ask" id="f">
+        <input id="q" placeholder="Ask about any coin" maxlength="500" autocomplete="off" aria-label="Your question">
+        <button class="btn" id="send">Send</button>
+      </form>
+      <p class="hint" id="mode"></p>
+    </section>
+  </div>
+
+  <details>
+    <summary>Settings</summary>
+    <div class="set">
+      <label>AI key (optional, enables plain-language questions)
+        <input id="llmKey" type="password" autocomplete="off" placeholder="Paste your AI key">
+      </label>
+      <label>AI service address
+        <input id="llmUrl" placeholder="https://api.groq.com/openai/v1">
+      </label>
+      <label>AI model name
+        <input id="llmModel" placeholder="llama-3.3-70b-versatile">
+      </label>
+      <label>CoinGecko key (optional, gives more price requests per minute)
+        <input id="cgKey" type="password" autocomplete="off" placeholder="Paste your CoinGecko Demo key">
+      </label>
+      <p class="hint">Keys are saved only in this browser on your computer. Do not put this file on a public website with keys filled in.</p>
+    </div>
+  </details>
+
+  <footer>Prices come from CoinGecko. For information only, not financial advice.</footer>
+</div>
+
+<script>
+(() => {
+const CG = "https://api.coingecko.com/api/v3";
+const DEFAULT_WATCH = ["bitcoin","ethereum","solana","binancecoin","ripple"];
+const CACHE_MS = 25000, MAX_ROUNDS = 4, MAX_HISTORY = 10;
+const $ = (s) => document.querySelector(s);
+
+const store = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+
+const fmtPrice = (n) => n == null ? "—" :
+  n.toLocaleString("en-US", { style:"currency", currency:"USD", minimumFractionDigits:2, maximumFractionDigits: n >= 1 ? 2 : n >= 0.01 ? 4 : 6 });
+const fmtPct = (n) => n == null ? "—" : (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
+const dir = (n) => (n || 0) >= 0 ? "up" : "down";
+
+/* ---------- data ---------- */
+const cache = new Map();
+async function cg(path){
+  const hit = cache.get(path);
+  if (hit && Date.now() - hit.t < CACHE_MS) return hit.data;
+  const key = store.get("cgKey", "");
+  const url = CG + path + (key ? (path.includes("?") ? "&" : "?") + "x_cg_demo_api_key=" + encodeURIComponent(key) : "");
+  const res = await fetch(url, { headers: { accept: "application/json" } });
+  if (!res.ok) throw new Error("status " + res.status);
+  const data = await res.json();
+  cache.set(path, { t: Date.now(), data });
+  return data;
+}
+
+/* ---------- watchlist ---------- */
+let watch = store.get("watch", DEFAULT_WATCH);
+
+function setStatus(text, isErr){
+  const s = $("#status"); s.textContent = text; s.className = isErr ? "err" : "";
+}
+
+function renderHero(c){
+  if (!c) return;
+  $("#heroName").textContent = c.name;
+  $("#heroPrice").textContent = fmtPrice(c.current_price);
+  const el = $("#heroChg"), p = c.price_change_percentage_24h;
+  el.className = "chg " + dir(p);
+  el.textContent = (p >= 0 ? "▲ " : "▼ ") + fmtPct(p) + " in 24 hours";
+}
+
+function renderRows(list){
+  const box = $("#rows"); box.textContent = "";
+  if (!list.length){ const p = document.createElement("p"); p.className = "hint"; p.textContent = "Your watchlist is empty. Add a coin above."; box.appendChild(p); return; }
+  list.forEach((c) => {
+    const row = document.createElement("div"); row.className = "row";
+    const nm = document.createElement("div"); nm.className = "nm";
+    const b = document.createElement("strong"); b.textContent = c.name;
+    const sy = document.createElement("span"); sy.textContent = c.symbol.toUpperCase();
+    nm.append(b, sy);
+    const pr = document.createElement("div"); pr.className = "num"; pr.textContent = fmtPrice(c.current_price);
+    const ch = document.createElement("div"); ch.className = "num " + dir(c.price_change_percentage_24h);
+    ch.textContent = fmtPct(c.price_change_percentage_24h);
+    const rm = document.createElement("button"); rm.className = "link"; rm.textContent = "Remove";
+    rm.setAttribute("aria-label", "Remove " + c.name);
+    rm.onclick = () => { watch = watch.filter((x) => x !== c.id); store.set("watch", watch); refresh(); };
+    row.append(nm, pr, ch, rm); box.appendChild(row);
+  });
+}
+
+async function refresh(){
+  const ids = [...new Set(["bitcoin", ...watch])];
+  try {
+    const data = await cg(`/coins/markets?vs_currency=usd&ids=${encodeURIComponent(ids.join(","))}&order=market_cap_desc&price_change_percentage=24h`);
+    const byId = Object.fromEntries(data.map((c) => [c.id, c]));
+    renderHero(byId.bitcoin);
+    renderRows(watch.map((id) => byId[id]).filter(Boolean));
+    setStatus("Live. Updated " + new Date().toLocaleTimeString() + ". Refreshes every 30 seconds.", false);
+  } catch (e) {
+    setStatus("Couldn't load prices (" + e.message + "). Check your internet connection. Without a key, CoinGecko allows only a few requests a minute, so wait a minute or add a CoinGecko key in Settings.", true);
+  }
+}
+
+$("#addbtn").onclick = async () => {
+  const q = $("#addq").value.trim(), msg = $("#addmsg");
+  if (!q) return;
+  msg.textContent = "Searching…";
+  try {
+    const r = await cg("/search?query=" + encodeURIComponent(q));
+    const hit = (r.coins || [])[0];
+    if (!hit){ msg.textContent = `No coin found for "${q}". Try the full name.`; return; }
+    if (!watch.includes(hit.id)){ watch.push(hit.id); store.set("watch", watch); }
+    msg.textContent = "Added " + hit.name + ".";
+    $("#addq").value = ""; refresh();
+  } catch (e){ msg.textContent = "Couldn't search right now (" + e.message + "). Try again in a minute."; }
+};
+
+/* ---------- agent tools ---------- */
+const tools = {
+  async get_price({ ids, currency = "usd" }){
+    const list = String(ids || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean).slice(0, 10);
+    if (!list.length) return { error: "No coin ids given" };
+    const cur = String(currency).toLowerCase();
+    const data = await cg(`/simple/price?ids=${encodeURIComponent(list.join(","))}&vs_currencies=${encodeURIComponent(cur)}&include_24hr_change=true&include_last_updated_at=true`);
+    return { source: "CoinGecko", currency: cur, data };
+  },
+  async search_coin({ query }){
+    const d = await cg("/search?query=" + encodeURIComponent(String(query || "")));
+    return (d.coins || []).slice(0, 5).map((c) => ({ id: c.id, name: c.name, symbol: c.symbol, rank: c.market_cap_rank }));
+  },
+  async top_markets({ limit = 10, currency = "usd" }){
+    const n = Math.min(Math.max(parseInt(limit) || 10, 1), 20);
+    const d = await cg(`/coins/markets?vs_currency=${encodeURIComponent(String(currency).toLowerCase())}&order=market_cap_desc&per_page=${n}&page=1`);
+    return d.map((c) => ({ id: c.id, symbol: c.symbol, price: c.current_price, change_24h_pct: c.price_change_percentage_24h, market_cap: c.market_cap }));
+  }
+};
+const toolDefs = [
+  { type:"function", function:{ name:"get_price", description:"Current price and 24h change for coins by CoinGecko id (e.g. bitcoin, ethereum).", parameters:{ type:"object", properties:{ ids:{type:"string",description:"Comma-separated CoinGecko ids"}, currency:{type:"string"} }, required:["ids"] } } },
+  { type:"function", function:{ name:"search_coin", description:"Find CoinGecko ids from a coin name or symbol.", parameters:{ type:"object", properties:{ query:{type:"string"} }, required:["query"] } } },
+  { type:"function", function:{ name:"top_markets", description:"Top coins by market cap with price and 24h change.", parameters:{ type:"object", properties:{ limit:{type:"integer"}, currency:{type:"string"} } } } }
+];
+const SYSTEM = `You are a crypto market assistant.
+- Use tools for every price, 24h change, or market-cap figure. Never guess or use memory for numbers.
+- If a tool fails, say so plainly.
+- If a coin name is unclear, call search_coin first.
+- Mention the source (CoinGecko) and that data is near real-time.
+- Keep answers short: the number first, then one line of context.
+- Do not give buy/sell/hold advice or price predictions. Note that crypto is volatile and this is not financial advice.
+- Never ask for or handle wallet keys or seed phrases.`;
+
+async function llm(messages){
+  const base = (store.get("llmUrl", "") || "https://api.groq.com/openai/v1").replace(/\/+$/, "");
+  const model = store.get("llmModel", "") || "llama-3.3-70b-versatile";
+  const res = await fetch(base + "/chat/completions", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer " + store.get("llmKey", "") },
+    body: JSON.stringify({ model, messages, tools: toolDefs, tool_choice: "auto", temperature: 0.2 })
+  });
+  if (!res.ok) throw new Error("AI service returned status " + res.status);
+  return (await res.json()).choices[0].message;
+}
+
+const history = [];
+async function agent(){
+  const messages = [{ role:"system", content: SYSTEM }, ...history.slice(-MAX_HISTORY)];
+  for (let i = 0; i < MAX_ROUNDS; i++){
+    const msg = await llm(messages);
+    if (!msg.tool_calls || !msg.tool_calls.length) return msg.content || "";
+    messages.push(msg);
+    for (const call of msg.tool_calls){
+      let result;
+      try {
+        const args = JSON.parse(call.function.arguments || "{}");
+        const fn = tools[call.function.name];
+        result = fn ? await fn(args) : { error: "Unknown tool" };
+      } catch (e){ result = { error: String(e.message || e) }; }
+      messages.push({ role:"tool", tool_call_id: call.id, content: JSON.stringify(result) });
+    }
+  }
+  return "I couldn't finish that lookup. Try a simpler question.";
+}
+
+/* Works without an AI key: treats the question as a coin name. */
+async function simple(text){
+  const q = text.replace(/\b(what|whats|what's|is|the|price|prices|of|for|how|much|does|cost|current|now|a|an|in|usd|please|show|me|tell|about)\b/gi, " ").replace(/[?!.,]/g, " ").replace(/\s+/g, " ").trim();
+  if (!q) return "Type a coin name, for example: bitcoin or solana.";
+  const found = await tools.search_coin({ query: q });
+  if (!found.length) return `I couldn't find a coin called "${q}". Try the full name, like "cardano".`;
+  const d = await cg(`/coins/markets?vs_currency=usd&ids=${encodeURIComponent(found[0].id)}&price_change_percentage=24h`);
+  const c = d[0];
+  if (!c) return "No price data came back for " + found[0].name + ". Try again in a minute.";
+  return `${c.name} (${c.symbol.toUpperCase()}) is ${fmtPrice(c.current_price)}, ${fmtPct(c.price_change_percentage_24h)} over 24 hours.\nSource: CoinGecko, ${new Date().toLocaleTimeString()}.`;
+}
+
+/* ---------- chat UI ---------- */
+function addMsg(cls, text){
+  const d = document.createElement("div"); d.className = "msg " + cls; d.textContent = text;
+  const log = $("#log"); log.appendChild(d); log.scrollTop = log.scrollHeight; return d;
+}
+function updateMode(){
+  $("#mode").textContent = store.get("llmKey", "")
+    ? "AI mode is on. Ask in plain language, like “compare ETH and SOL”."
+    : "Basic mode: type a coin name to see its price. Add an AI key in Settings to ask full questions.";
+}
+$("#f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = $("#q").value.trim(); if (!text) return;
+  $("#q").value = ""; addMsg("u", text);
+  const btn = $("#send"); btn.disabled = true;
+  const wait = addMsg("a", "Checking prices…");
+  try {
+    let reply;
+    if (store.get("llmKey", "")){ history.push({ role:"user", content:text.slice(0, 500) }); reply = await agent(); history.push({ role:"assistant", content: reply }); }
+    else { reply = await simple(text); }
+    wait.textContent = reply;
+  } catch (err){
+    wait.textContent = "That didn't work: " + (err.message || err) + ". Check your keys in Settings and your internet connection, then try again.";
+  }
+  btn.disabled = false; $("#q").focus();
+});
+
+/* ---------- settings ---------- */
+[["llmKey","#llmKey"],["llmUrl","#llmUrl"],["llmModel","#llmModel"],["cgKey","#cgKey"]].forEach(([k, sel]) => {
+  const el = $(sel); el.value = store.get(k, "");
+  el.addEventListener("change", () => { store.set(k, el.value.trim()); updateMode(); if (k === "cgKey") refresh(); });
+});
+
+addMsg("a", "Ask me about any coin. I'll look up the latest price.");
+updateMode(); refresh(); setInterval(refresh, 30000);
+})();
+</script>
+</body>
+</html>
